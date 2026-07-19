@@ -1,0 +1,304 @@
+// ─────────────────────────────────────────────────────────────────────────
+// RentFlow — Prisma Schema (PostgreSQL)
+//
+// Design notes
+// ------------
+// * Branch.id is a human-readable slug ("main-branch", "gandhinagar", ...)
+//   rather than a UUID because the frontend already treats branch as a
+//   plain string key (see rentflow-frontend/src/services/mockData.ts).
+// * Every enum is stored SCREAMING_SNAKE in Postgres but is translated to
+//   the frontend's lowercase string unions (e.g. "admin", "reserved") in
+//   the DTO layer (src/dto/*.js) — the API never leaks raw Prisma enum
+//   casing to clients.
+// * `User.tokenVersion` lets us invalidate every outstanding JWT for a
+//   user instantly (e.g. when an admin suspends an account) without
+//   needing a server-side session store or token blacklist.
+// ─────────────────────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── Enums ───────────────────────────────────────────────────────────────
+
+enum Role {
+  USER
+  ADMIN
+  VENDOR
+}
+
+enum UserStatus {
+  PENDING
+  ACTIVE
+  REJECTED
+}
+
+enum AccountStatus {
+  ACTIVE
+  SUSPENDED
+  PENDING
+}
+
+enum RentalStatus {
+  PENDING
+  RESERVED
+  REJECTED
+  CANCELLED
+  ACTIVE
+  DELIVERED
+  RETURNED
+  OVERDUE
+  COMPLETED
+}
+
+enum RoundingLogic {
+  NEAREST_HOUR
+  NEAREST_15
+  EXACT
+}
+
+enum DeliveryType {
+  DELIVERY
+  PICKUP
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+// ── Models ──────────────────────────────────────────────────────────────
+
+model Branch {
+  id        String   @id
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users   User[]
+  items   Item[]
+  rentals Rental[]
+
+  @@map("branches")
+}
+
+model User {
+  id           String        @id @default(uuid())
+  name         String
+  email        String        @unique
+  password     String
+  role         Role          @default(USER)
+  status       UserStatus    @default(ACTIVE)
+  avatarUrl    String?
+  /// Bumped whenever every existing session for this user must be
+  /// invalidated (e.g. suspension, forced password reset).
+  tokenVersion Int           @default(0)
+
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  rentals Rental[]
+  addresses Address[]
+  orders    Order[]
+  wishlists Wishlist[]
+  documents VerificationDocument[]
+  payments  Payment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([branchId])
+  @@index([role])
+  @@index([status])
+  @@map("users")
+}
+
+model Item {
+  id        String  @id @default(uuid())
+  name      String
+  category  String
+  brand     String?
+  size      String?
+  dailyRate Decimal @db.Decimal(10, 2)
+  isActive  Boolean @default(true)
+
+  model           String?
+  description     String?
+  quantity        Int       @default(1)
+  condition       String?
+  hourlyRate      Decimal?  @db.Decimal(10, 2)
+  weeklyRate      Decimal?  @db.Decimal(10, 2)
+  monthlyRate     Decimal?  @db.Decimal(10, 2)
+  securityDeposit Decimal?  @db.Decimal(10, 2)
+  images          String[]
+  documents       String[]
+  specifications  Json?
+
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  rentals Rental[]
+  wishlists Wishlist[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([branchId])
+  @@index([category])
+  @@map("items")
+}
+
+model Rental {
+  id     String       @id @default(uuid())
+  status RentalStatus @default(PENDING)
+
+  startDate   DateTime
+  dueDate     DateTime
+  returnedAt  DateTime?
+  lateFee     Decimal?  @db.Decimal(10, 2)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  itemId String
+  item   Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  orderId String?
+  order   Order? @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([itemId])
+  @@index([branchId])
+  @@index([orderId])
+  @@index([status])
+  @@map("rentals")
+}
+
+/// Singleton configuration row (id is always 1). Modeled as its own table
+/// (rather than a key/value settings blob) so it stays strongly typed and
+/// easy to extend per-branch later if the product needs that.
+model LateFeePolicy {
+  id                    Int           @id @default(1)
+  gracePeriodMinutes    Int           @default(30)
+  hourlyRate            Decimal       @default(15) @db.Decimal(10, 2)
+  dailyMaxLimit         Decimal       @default(250) @db.Decimal(10, 2)
+  roundingLogic         RoundingLogic @default(NEAREST_HOUR)
+  autoLockAtAmount      Decimal       @default(500) @db.Decimal(10, 2)
+  autoLockEnabled       Boolean       @default(true)
+  legalAutoDraftEnabled Boolean       @default(false)
+  updatedAt             DateTime      @updatedAt
+
+  @@map("late_fee_policy")
+}
+
+model Address {
+  id        String   @id @default(uuid())
+  street    String
+  city      String
+  state     String
+  zipCode   String
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  orders    Order[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("addresses")
+}
+
+model Order {
+  id              String       @id @default(uuid())
+  totalAmount     Decimal      @db.Decimal(10, 2)
+  securityDeposit Decimal      @db.Decimal(10, 2)
+  deliveryType    DeliveryType @default(PICKUP)
+  status          OrderStatus  @default(PENDING)
+  payments        Payment[]
+
+  userId          String
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  addressId       String?
+  address         Address?     @relation(fields: [addressId], references: [id], onDelete: SetNull)
+
+  rentals         Rental[]
+
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([userId])
+  @@index([addressId])
+  @@map("orders")
+}
+
+model VerificationDocument {
+  id        String   @id @default(uuid())
+  type      String   // e.g. "ID_CARD", "DRIVERS_LICENSE", "UTILITY_BILL"
+  url       String
+  status    String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("verification_documents")
+}
+
+model Payment {
+  id            String        @id @default(uuid())
+  amount        Decimal       @db.Decimal(10, 2)
+  status        PaymentStatus @default(PENDING)
+  stripeSession String?
+  
+  userId        String
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orderId       String
+  order         Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([userId])
+  @@index([orderId])
+  @@map("payments")
+}
+
+model Wishlist {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  itemId    String
+  item      Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, itemId])
+  @@index([userId])
+  @@index([itemId])
+  @@map("wishlists")
+}

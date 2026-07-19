@@ -1,0 +1,47 @@
+{
+  "name": "rentflow-backend",
+  "version": "1.0.0",
+  "description": "Production-ready Express + Prisma (PostgreSQL) REST API for the RentFlow rental management system.",
+  "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "lint": "oxlint .",
+    "test": "cross-env NODE_ENV=test JWT_SECRET=test-secret-test-secret DATABASE_URL=postgresql://test:test@localhost:5432/test npx jest --runInBand",
+    "test:watch": "cross-env NODE_ENV=test JWT_SECRET=test-secret-test-secret DATABASE_URL=postgresql://test:test@localhost:5432/test npx jest --watch",
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:deploy": "prisma migrate deploy",
+    "prisma:studio": "prisma studio",
+    "seed": "node prisma/seed.js"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.20.0",
+    "bcryptjs": "^2.4.3",
+    "cookie-parser": "^1.4.6",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.4.0",
+    "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "morgan": "^1.10.0",
+    "multer": "^2.2.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "jest": "^29.7.0",
+    "jest-mock-extended": "^3.0.7",
+    "nodemon": "^3.1.4",
+    "oxlint": "^1.74.0",
+    "prisma": "^5.20.0",
+    "supertest": "^7.0.0"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
+  }
+}

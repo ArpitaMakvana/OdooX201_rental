@@ -1,0 +1,49 @@
+@import "tailwindcss";
+
+@theme {
+  /* RentFlow brand tokens — pulled from the existing Admin Console UI */
+  --color-rf-navy-950: #0b1120;
+  --color-rf-navy-900: #0f172a;
+  --color-rf-navy-800: #1a2438;
+  --color-rf-navy-700: #263349;
+
+  --color-rf-mint-400: #5eead4;
+  --color-rf-mint-500: #34d8a3;
+  --color-rf-mint-600: #22b98a;
+
+  --color-rf-cream-50: #fafaf8;
+  --color-rf-cream-100: #f4f3f0;
+
+  --color-rf-danger: #dc2626;
+  --color-rf-warning: #b45309;
+
+  --font-display: "Sora", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+@layer base {
+  html {
+    font-family: var(--font-body);
+  }
+  body {
+    @apply bg-rf-cream-100 text-rf-navy-900 antialiased;
+  }
+  h1, h2, h3, h4 {
+    font-family: var(--font-display);
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-rf-mint-500);
+    outline-offset: 2px;
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: var(--color-rf-navy-700);
+    border-radius: 999px;
+  }
+}
