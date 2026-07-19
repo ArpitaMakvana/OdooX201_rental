@@ -184,6 +184,8 @@ Developed during **OdooX201 Hackathon**
 
 - Arpita Makvana
 - Aabha Thanki
+- Zeel Kanudawala
+- Krish Joshi
 
 ---
 
